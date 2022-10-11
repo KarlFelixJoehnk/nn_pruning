@@ -142,7 +142,7 @@ class DistilBertStructure(ModelStructure):
         output_dense="ffn.lin2",
     )
     ATTENTION_PREFIX = ("attention",)
-    ATTENTION_LAYERS = ("q_lin", "k_lin", "v_lin")
+    ATTENTION_LAYERS = ("query", "key", "value")
     MHA_LAYERS = ATTENTION_LAYERS + ("att_dense",)
     NAME_CONFIG = dict(
         hidden_size="dim",
