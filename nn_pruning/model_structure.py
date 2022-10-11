@@ -1,6 +1,7 @@
 from typing import Dict
 import re
-from transformers import BertConfig, BartConfig, T5Config
+from transformers import BertConfig, BartConfig, T5Config, DistilBertConfig
+
 
 class ModelStructure:
     PATTERN_PREFIX: str = ""
@@ -55,6 +56,7 @@ class ModelStructure:
     def is_layernorm(module_name):
         return "layernorm" in module_name.lower().replace("_", "")
 
+
 class BertStructure(ModelStructure):
     PATTERN_PREFIX = "bert.encoder.layer.[0-9]+."
     LAYER_PATTERNS = dict(
@@ -75,6 +77,7 @@ class BertStructure(ModelStructure):
         num_attention_heads="num_attention_heads",
         attention_head_size="attention_head_size",
     )
+
 
 class BartStructure(ModelStructure):
     PATTERN_PREFIX = "model.(en|de)coder.layers.[0-9]+."
@@ -98,8 +101,9 @@ class BartStructure(ModelStructure):
         intermediate_size="encoder_ffn_dim",
         num_hidden_layers="num_hidden_layers",
         num_attention_heads="num_heads",
-        attention_head_size = "head_dim",
+        attention_head_size="head_dim",
     )
+
 
 class T5Structure(ModelStructure):
     PATTERN_PREFIX = "(en|de)coder.block.[0-9]+.layer.[0-9]+."
@@ -126,20 +130,47 @@ class T5Structure(ModelStructure):
         attention_head_size="key_value_proj_dim",
     )
 
+
+class DistilBertStructure(ModelStructure):
+    PATTERN_PREFIX = "distilbert.transformer.layer.[0-9]+."
+    LAYER_PATTERNS = dict(
+        query="attention.q_lin",
+        key="attention.k_lin",
+        value="attention.v_lin",
+        att_dense="attention.out_lin",
+        interm_dense="ffn.lin1",
+        output_dense="ffn.lin2",
+    )
+    ATTENTION_PREFIX = ("attention",)
+    ATTENTION_LAYERS = ("q_lin", "k_lin", "v_lin")
+    MHA_LAYERS = ATTENTION_LAYERS + ("att_dense",)
+    NAME_CONFIG = dict(
+        hidden_size="dim",
+        intermediate_size="hidden_dim",
+        num_hidden_layers="n_layers",
+        num_attention_heads="n_heads",
+        attention_head_size="attention_head_size",
+    )
+
+
 config2struct = {
     BertConfig: BertStructure,
     BartConfig: BartStructure,
     T5Config: T5Structure,
+    DistilBertConfig: DistilBertStructure
 }
 
 name2struct = {
     "bert": BertStructure,
     "bart": BartStructure,
     "t5": T5Structure,
+    "distilbert": DistilBertStructure
 }
+
 
 class ModelStructureNotFound(RuntimeError):
     pass
+
 
 def struct_from_config(config):
     structure = None
@@ -152,11 +183,13 @@ def struct_from_config(config):
         raise ModelStructureNotFound(f"Model config does not match any of the defined structures.")
     return structure
 
+
 def struct_from_name(model_name):
     for name in name2struct.keys():
         if name in model_name:
             return name2struct[name]
     raise ModelStructureNotFound(f"Model name {model_name} does not match any of the defined structures.")
+
 
 def struct_from_model(model):
     for structure in config2struct.values():
@@ -172,6 +205,7 @@ def struct_from_model(model):
     else:
         raise RuntimeError("Model does not match any of the defined structures.")
 
+
 def count_num_heads(model):
     head_count = 0
     model_structure = struct_from_config(model.config_class)
@@ -186,4 +220,3 @@ def count_num_heads(model):
                     raise RuntimeError(f"Not able to retrieve number of attention head")
                 head_count += num_attention_heads
     return head_count
-

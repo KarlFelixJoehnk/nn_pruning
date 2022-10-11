@@ -1,13 +1,12 @@
 import unittest
 from unittest import TestCase
 
-from transformers import BertConfig, BertForQuestionAnswering
+from transformers import BertConfig, BertForQuestionAnswering, DistilBertConfig, DistilBertForSequenceClassification
 
-from nn_pruning.model_structure import BertStructure
+from nn_pruning.model_structure import BertStructure, DistilBertStructure
 from nn_pruning.modules.masked_nn import (
     ChannelPruningModulePatcher,
     JointPruningModulePatcher,
-    LinearPruningArgs,
     LinearPruningModulePatcher,
     LinearPruningArgs,
 )
@@ -16,6 +15,8 @@ from nn_pruning.training_patcher import LinearModelPatcher, PatcherContext
 
 class TestFun(TestCase):
     MODEL_STRUCTURE = BertStructure
+
+    DISTILBERT_MODEL_STRUCTURE = DistilBertStructure
     def test_base(self):
         config = BertConfig.from_pretrained("bert-base-uncased")
         model = BertForQuestionAnswering(config)
@@ -45,6 +46,33 @@ class TestFun(TestCase):
         module_patchers = dict(query=p, key=p, value=p, att_dense=p, interm_dense=p, output_dense=p)
 
         patcher = LinearModelPatcher(module_patchers, self.MODEL_STRUCTURE)
+        patcher.patch(model)
+
+        self.assertEqual(patcher.stats["patched"], 72)
+        key_sizes = {k: len(v) for k, v in context.context_modules.items()}
+
+        self.assertEqual(key_sizes, {"mask": 72})
+
+    def test_patch_distilbertmodule_independent_parameters(self):
+        config = DistilBertConfig.from_pretrained("bert-base-uncased")
+        model = DistilBertForSequenceClassification(config)
+
+        parameters = LinearPruningArgs(
+            method="topK",
+            submethod="default",
+            ampere_method="disabled",
+            block_rows=32,
+            block_cols=32,
+            min_elements=0.005,
+        )
+
+        context = PatcherContext()
+
+        p = LinearPruningModulePatcher(context, parameters, self.DISTILBERT_MODEL_STRUCTURE)
+
+        module_patchers = dict(query=p, key=p, value=p, att_dense=p, interm_dense=p, output_dense=p)
+
+        patcher = LinearModelPatcher(module_patchers, self.DISTILBERT_MODEL_STRUCTURE)
         patcher.patch(model)
 
         self.assertEqual(patcher.stats["patched"], 72)
